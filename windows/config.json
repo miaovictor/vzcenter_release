@@ -1,0 +1,64 @@
+{
+    "devices":[
+        {
+            "sn": "00000000-00000000",
+            "ip": "192.168.100.0",
+            "enable": true,
+            "plate_push_interval": 1
+        },
+        {
+            "sn": "11111111-11111111",
+            "ip": "192.168.100.1",
+            "enable": true,
+            "plate_push_interval": 2
+        },
+        {
+            "sn": "22222222-22222222",
+            "ip": "192.168.100.2",
+            "enable": true,
+            "plate_push_interval": 3
+        },
+        {
+            "sn": "33333333-33333333",
+            "ip": "192.168.100.3",
+            "enable": true,
+            "plate_push_interval": 4
+        },
+        {
+            "sn": "44444444-44444444",
+            "ip": "192.168.100.4",
+            "enable": true,
+            "plate_push_interval": 5
+        },
+        {
+            "sn": "55555555-55555555",
+            "ip": "192.168.100.5",
+            "enable": true,
+            "plate_push_interval": 6
+        },
+        {
+            "sn": "66666666-66666666",
+            "ip": "192.168.100.6",
+            "enable": true,
+            "plate_push_interval": 7
+        },
+        {
+            "sn": "77777777-77777777",
+            "ip": "192.168.100.7",
+            "enable": true,
+            "plate_push_interval": 8
+        },
+        {
+            "sn": "88888888-88888888",
+            "ip": "192.168.100.8",
+            "enable": true,
+            "plate_push_interval": 9
+        },
+        {
+            "sn": "99999999-99999999",
+            "ip": "192.168.100.9",
+            "enable": true,
+            "plate_push_interval": 10
+        }
+    ]
+}

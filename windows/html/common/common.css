@@ -1,0 +1,41 @@
+.domBtn {
+    width:110px;
+    height:110px;
+    border:1px solid #ddd;
+    font-size:12px;
+    text-align:center;
+    margin:10px 5px 0 5px;
+    float:left;
+}
+.domBtn:hover{
+    cursor:default;
+}
+.img {
+    width:60px;
+    height:60px;
+    margin:10px auto;
+    background:url(img/l_online.png);
+}
+
+.dom_tmp {
+    position:absolute;
+    width:110px;
+    height:110px;
+    border:1px solid #aaa;
+    font-size:12px;
+    text-align:center;
+    margin:10px 5px 0 5px;
+    float:left;
+}
+.dom_tmp p{
+    text-align:center;
+}
+.domBtn_Disabled {
+    width:110px;
+    height:110px;
+    border:1px solid #aaa;
+    font-size:12px;
+    text-align:center;
+    margin:10px 5px 0 5px;
+    float:left;
+}
