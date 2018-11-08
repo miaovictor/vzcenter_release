@@ -987,20 +987,20 @@
                             // $("#http_poll_enable").check_val(json_data.serv_poll_status == 1);
                             // $("#httprepushnums_sel").select_val(json_data.repush_nums);
 
-                            var ip_ext = "";
-                            if (json_data.http_ip_ext != null) {
-                                var IP_Ext_arr = json_data.http_ip_ext.ip_ext;
-                                if (IP_Ext_arr) {
-                                    for (var i = 0; i < IP_Ext_arr.length; i++) {
-                                        if (ip_ext != "") {
-                                            ip_ext += ";";
-                                        }
-                                        ip_ext += Base64.decode(IP_Ext_arr[i], true);
-                                    }
-                                }
-                            }
-                            g_centerserver_hostname_alt = ip_ext;
-                            $("#centerserver_hostnamea_alt").val(ip_ext);
+                            // var ip_ext = "";
+                            // if (json_data.http_ip_ext != null) {
+                            //     var IP_Ext_arr = json_data.http_ip_ext.ip_ext;
+                            //     if (IP_Ext_arr) {
+                            //         for (var i = 0; i < IP_Ext_arr.length; i++) {
+                            //             if (ip_ext != "") {
+                            //                 ip_ext += ";";
+                            //             }
+                            //             ip_ext += Base64.decode(IP_Ext_arr[i], true);
+                            //         }
+                            //     }
+                            // }
+                            // g_centerserver_hostname_alt = ip_ext;
+                            // $("#centerserver_hostnamea_alt").val(ip_ext);
                         } catch (e) {
                             return false;
                         }
@@ -1073,29 +1073,29 @@
                 cs_alarm_state.uri = Base64.encode(cs_alarm_state_uri, true);
                 json_cfg_req.body.cs_alarm_state = cs_alarm_state;
 
-                var centerserver_hostnamea_alt = $("#centerserver_hostnamea_alt").val();
-                if (g_centerserver_hostname_alt != centerserver_hostnamea_alt) {
-                    var json_ip_ext = {}
-                    json_ip_ext.ip_ext = [];
-                    var ip_error = false;
-                    if (centerserver_hostnamea_alt != "") {
-                        var ip_arr = centerserver_hostnamea_alt.split(";");
-                        for (var i = 0; i < ip_arr.length; i++) {
-                            if (!test_add(ip_arr[i]) && !test_ip(ip_arr[i])) {
-                                alert("The alternate server address is not correct");
-                                ip_error = true;
-                                break;
-                            } else {
-                                //var json = {};
-                                //sjon.ip_ext = ;
-                                json_ip_ext.ip_ext.push(Base64.encode(ip_arr[i], true));
-                            }
-                        }
-                    }
-                    if (!ip_error) {
-                        json_cfg_req.body.http_ip_ext = json_ip_ext;
-                    }
-                }
+                // var centerserver_hostnamea_alt = $("#centerserver_hostnamea_alt").val();
+                // if (g_centerserver_hostname_alt != centerserver_hostnamea_alt) {
+                //     var json_ip_ext = {}
+                //     json_ip_ext.ip_ext = [];
+                //     var ip_error = false;
+                //     if (centerserver_hostnamea_alt != "") {
+                //         var ip_arr = centerserver_hostnamea_alt.split(";");
+                //         for (var i = 0; i < ip_arr.length; i++) {
+                //             if (!test_add(ip_arr[i]) && !test_ip(ip_arr[i])) {
+                //                 alert("The alternate server address is not correct");
+                //                 ip_error = true;
+                //                 break;
+                //             } else {
+                //                 //var json = {};
+                //                 //sjon.ip_ext = ;
+                //                 json_ip_ext.ip_ext.push(Base64.encode(ip_arr[i], true));
+                //             }
+                //         }
+                //     }
+                //     if (!ip_error) {
+                //         json_cfg_req.body.http_ip_ext = json_ip_ext;
+                //     }
+                // }
 
                 // var ssl_enable = 0;
                 // if ($("#anonymity").check_val()) {
@@ -1283,7 +1283,7 @@
                         <p id="log_content" style="max-height:260px; overflow:auto;" />
                     </td>
                 </tr>
-                <tr>
+                <!-- <tr>
                     <td style="min-width:100px">
                         alternative server
                     </td>
@@ -1291,7 +1291,7 @@
                         <input id="centerserver_hostnamea_alt" type="text" size="30" />
                     </td>
                     <td id="hostnamea_alt_hint">Multiple addresses in English ";" separated</td>
-                </tr>
+                </tr> -->
                 <tr>
                     <td>
                         port
