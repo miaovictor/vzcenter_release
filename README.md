@@ -53,3 +53,8 @@
 ![image](https://note.youdao.com/yws/public/resource/e0c7bb12d57ada0327870eee70ea2628/xmlnote/1DFB1E0A211C4378B7C5FAABBCA73989/9891)
 
 - 选中`HTTP`选项卡，既可看到HTTP相关的推送配置。
+
+### 协议文档
+
+[中心服务模块协议](http://note.youdao.com/noteshare?id=e9715f8316f2a4f36428a188391faebc&sub=AF9FEDA7B0214656A5F40ECA83AC86F2)
+
