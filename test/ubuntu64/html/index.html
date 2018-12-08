@@ -1,0 +1,1641 @@
+﻿<!DOCTYPE HTML>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <title>group</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+    <link rel="stylesheet" href="css/bootstrap-theme.min.css">
+    <link rel="stylesheet" href="css/jquery-ui-1.10.3.custom.css">
+    <link rel="stylesheet" href="css/page.css">
+    <link rel="stylesheet" href="common/common.css">
+    <link rel="stylesheet" href="common/zTreeStyle.css">
+    <style>
+        p {
+            margin: 0;
+        }
+
+        #tabs-3 table td,
+        #tabs-3 table th {
+            text-align: center;
+        }
+
+        .bolder {
+            font-weight: bolder;
+        }
+    </style>
+    <script type="text/javascript" src="js/jquery-1.11.2.min.js"></script>
+    <script type="text/javascript" src="js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="js/jquery-ui-1.11.3.min.js"></script>
+    <script type="text/javascript" src="js/jquery-migrate-1.2.1.min.js"></script>
+    <script type="text/javascript" src="js/jquery.easytabs.js"></script>
+    <script type="text/javascript" src="js/jquery.ztree.core-3.5.min.js"></script>
+    <script type="text/javascript" src="js/jquery.ztree.exedit-3.5.min.js"></script>
+    <script type="text/javascript" src="js/custom-ui.js"></script>
+    <script type="text/javascript" src="js/utf8.js"></script>
+    <script type="text/javascript" src="js/base64.js"></script>
+    <script type="text/javascript">
+        function get_cfg(callback) {
+            $.ajax({
+                type: "get",
+                url: "/v1/park/configuration",
+                success: function (data) {
+                    callback(data);
+                },
+                dataType: "text"
+            });
+        }
+        function set_cfg(data, callback) {
+            $.ajax({
+                type: "put",
+                url: "/v1/park/configuration",
+                data: data,
+                success: function (data) {
+                    callback(data);
+                },
+                dataType: "text"
+            });
+        }
+
+        function timeConverter(UNIX_timestamp) {
+            var a = new Date(UNIX_timestamp * 1000);
+            //var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            var year = a.getFullYear();
+            //var month = months[a.getMonth()];
+            var month = a.getMonth() + 1;
+            var date = a.getDate();
+            var hour = a.getHours();
+            var min = a.getMinutes();
+            var sec = a.getSeconds();
+            //var time = date + ' ' + month + ' ' + year + ' ' + hour + ':' + min + ':' + sec ;
+            var time = year + "-" + month + '-' + date + ' ' + hour + ':' + min + ':' + sec;
+            return time;
+        }
+
+        var tab_remain_vehicles = new function () {
+            var cur_drag_parent = null;
+            var sel_sn_list = [];
+            var device_data_json;
+            var isSave = true;
+            var isNewNode = true;
+            var MoveTest = {
+                curTarget: null,
+                curTmpTarget: null,
+                hintText: "",
+                noSel: function () {
+                    try {
+                        window.getSelection ? window.getSelection().removeAllRanges() : document.selection.empty();
+                    } catch (e) { }
+                },
+                dragTree2Dom: function (treeId, treeNodes) {
+                    return !treeNodes[0].isParent;
+                },
+                prevTree: function (treeId, treeNodes, targetNode) {
+                    return false;
+                },
+                nextTree: function (treeId, treeNodes, targetNode) {
+                    return false;
+                },
+                innerTree: function (treeId, treeNodes, targetNode) {
+                    return targetNode != null;
+                },
+                dom2Tree: function (e, treeId, treeNode) {
+                    var target = MoveTest.curTarget, tmpTarget = MoveTest.curTmpTarget, newNode;
+                    if (!target) return;
+                    var zTree = $.fn.zTree.getZTreeObj("treeDemo"), parentNode;
+                    if (!zTree) {
+                        return;
+                    }
+                    if (treeNode != null && treeNode.isParent && treeNode.level != 1) {
+                        parentNode = treeNode;
+                    } else if (treeNode != null && !treeNode.isParent && treeNode.getParentNode().level == 0) {
+                        var noparentsame = false;
+                        if (treeNode.deviceType != target.attr("deviceType")) {
+                            var hintText = get_hintText(target.attr("deviceIP"), treeNode.name, treeNode.deviceType);
+                            var con = confirm(hintText);
+                            if (con) {
+                                target.attr("deviceType", treeNode.deviceType);
+                                update_device_type(target.attr("deviceSN"), "type", treeNode.deviceType);
+                            } else {
+                                noparentsame = true;
+                            }
+                        }
+                        if (!noparentsame) {
+                            parentNode = treeNode.getParentNode();
+                            var name = get_nosamename("gate");
+                            newNode = zTree.addNodes(parentNode, { id: name, name: name, isParent: true, open: true, icon: "common/img/CameraGroup.png" });
+                            movenode_and_setflag(treeNode, newNode[0], newNode[0].tId);
+                            parentNode = newNode[0];
+                        }
+                    } else if (treeNode != null && treeNode.isParent && treeNode.level == 1) {
+                        var isparentsame = false;
+                        var status = isSameType(target.attr("deviceType"), treeNode);
+                        if (status) {
+                            var hintText = get_hintText(target.attr("deviceIP"), treeNode.children[0].name, treeNode.children[0].deviceType);
+                            var con = confirm(hintText);
+                            if (con) {
+                                target.attr("deviceType", treeNode.children[0].deviceType);
+                                update_device_type(target.attr("deviceSN"), "type", treeNode.children[0].deviceType);
+                            } else {
+                                isparentsame = true;
+                            }
+                        }
+                        if (!isparentsame) {
+                            parentNode = treeNode;
+                        }
+                    }
+
+                    if (tmpTarget) tmpTarget.remove();
+                    if (!!parentNode) {
+                        var url = "common/img/s_offline.png";
+                        var nodes = zTree.addNodes(parentNode, { id: target.attr("domId"), name: target.attr("deviceIP"), deviceSN: target.attr("deviceSN"), deviceType: target.attr("deviceType"), deviceIP: target.attr("deviceIP"), deviceFlag: target.attr("deviceFlag"), icon: url });
+                        if (parentNode.level == 1) {
+                            nodes[0].deviceFlag = parentNode.tId;
+                        }
+                        target.remove();
+                        for (var i = 0; i < parentNode.children.length; i++) {
+                            update_device_flag(parentNode.children[i], parentNode.tId);
+                        }
+                        //update_device_flag(nodes[0], nodes[0].deviceFlag);
+                        zTree.selectNode(nodes[0]);
+                        MoveTest.mouseDown(e, treeId, nodes[0].getParentNode());
+                    } else {
+                        target.removeClass("domBtn_Disabled");
+                        target.addClass("domBtn");
+                    }
+                    MoveTest.curTarget = null;
+                    MoveTest.curTmpTarget = null;
+                },
+                bindDom: function () {
+                    $(".categoryDiv").bind("mousedown", MoveTest.bindMouseDown);
+                },
+                bindMouseDown: function (e) {
+                    var target = e.target;
+                    if (target.parentNode.className == "domBtn") {
+                        target = target.parentNode;
+                    }
+                    if (target != null && target.className == "domBtn") {
+                        var doc = $(document), target = $(target),
+                            docScrollTop = doc.scrollTop(),
+                            docScrollLeft = doc.scrollLeft();
+                        target.addClass("domBtn_Disabled");
+                        target.removeClass("domBtn");
+                        var str = "<div class=\"dom_tmp\" domid=\"21\"><p class=\"img\"></p><p>" + target.text() + "</p></div>";
+                        curDom = $(str);
+                        curDom.appendTo("body");
+
+                        curDom.css({
+                            "top": (e.clientY + docScrollTop + 3) + "px",
+                            "left": (e.clientX + docScrollLeft + 3) + "px"
+                        });
+                        MoveTest.curTarget = target;
+                        MoveTest.curTmpTarget = curDom;
+
+                        doc.bind("mousemove", MoveTest.bindMouseMove);
+                        doc.bind("mouseup", MoveTest.bindMouseUp);
+                        doc.bind("selectstart", MoveTest.docSelect);
+                    }
+                    if (e.preventDefault) {
+                        e.preventDefault();
+                    }
+                },
+                bindMouseMove: function (e) {
+                    MoveTest.noSel();
+                    var doc = $(document),
+                        docScrollTop = doc.scrollTop(),
+                        docScrollLeft = doc.scrollLeft(),
+                        tmpTarget = MoveTest.curTmpTarget;
+                    if (tmpTarget) {
+                        tmpTarget.css({
+                            "top": (e.clientY + docScrollTop + 3) + "px",
+                            "left": (e.clientX + docScrollLeft + 3) + "px"
+                        });
+                    }
+                    return false;
+                },
+                bindMouseUp: function (e) {
+                    var doc = $(document);
+                    doc.unbind("mousemove", MoveTest.bindMouseMove);
+                    doc.unbind("mouseup", MoveTest.bindMouseUp);
+                    doc.unbind("selectstart", MoveTest.docSelect);
+
+                    var target = MoveTest.curTarget, tmpTarget = MoveTest.curTmpTarget;
+                    if (tmpTarget) tmpTarget.remove();
+
+                    if ($(e.target).parents("#treeDemo").length == 0) {
+                        if (target) {
+                            target.removeClass("domBtn_Disabled");
+                            target.addClass("domBtn");
+                        }
+                        MoveTest.curTarget = null;
+                        MoveTest.curTmpTarget = null;
+                    }
+                },
+                bindSelect: function () {
+                    return false;
+                },
+                remove: function (treeId, treeNode) {
+                    var zTree = $.fn.zTree.getZTreeObj("treeDemo");
+                    if (!zTree) {
+                        return;
+                    }
+                    var oldparent = null;
+                    if (treeNode.isParent) {
+                        traverse_tree(treeNode);
+                    } else {
+                        del_treeNode(treeNode);
+                    }
+                    if (treeNode.level != 0) {
+                        oldparent = treeNode.getParentNode();
+                        if (!oldparent.children || oldparent.children.length == 1) {
+                            zTree.removeNode(oldparent);
+                        }
+                    }
+                    clear_tb();
+                },
+                mouseDown: function (event, treeId, treeNode) {
+                    if (!treeNode) {
+                        return false;
+                    }
+
+                    treeNode = get_root_node(treeNode);
+
+                    sel_sn_list = [];
+                    init_cur_node(treeNode);
+                },
+                rename: function (event, treeId, treeNode) {
+                    if (!treeNode.isParent) {
+                        update_device_flag(treeNode, treeNode.deviceFlag);
+                    } else {
+                        rename_rf(treeNode);
+                    }
+                    MoveTest.mouseDown(event, treeId, treeNode);
+                },
+                beforeRename: function (treeId, treeNode, newName) {
+                    var same_name = true;
+
+                    same_name = isSameName(newName, treeNode.tId);
+                    if (!same_name) {
+                        alert("不能与其他类名相同");
+                    }
+                    if (newName.length == 0) {
+                        alert("名字不能为空");
+                        same_name = false;
+                    }
+                    if (newName.length > 16) {
+                        alert("名字不能大于16个字符");
+                        same_name = false;
+                    }
+                    return same_name;
+                },
+                nodeDrop: function (event, treeId, treeNodes, targetNode) {
+                    var zTree = $.fn.zTree.getZTreeObj("treeDemo");
+                    if (!zTree) {
+                        return;
+                    }
+                    if (treeNodes[0].getParentNode().level == 1) {
+                        treeNodes[0].deviceFlag = treeNodes[0].getParentNode().tId;
+                        update_device_flag(treeNodes[0], treeNodes[0].deviceFlag);
+                    } else {
+                        update_device_type(treeNodes[0].deviceSN, "name", get_device_name(treeNodes[0]));
+                    }
+                    if (cur_drag_parent) {
+                        if (cur_drag_parent.children.length == 0) {
+                            zTree.removeNode(cur_drag_parent);
+                        } else {
+                            MoveTest.onRemove(event, treeId, cur_drag_parent.children[0]);
+                        }
+                        cur_drag_parent = null;
+                    }
+                    MoveTest.mouseDown(event, treeId, treeNodes[0]);
+                },
+                nodeDrag: function (event, treeId, treeNodes) {
+                    cur_drag_parent = treeNodes[0].getParentNode();
+                },
+                beforeDrag: function (treeId, treeNodes) {
+                    if (treeNodes[0].isParent) {
+                        return false;
+                    }
+                },
+                beforeDrop: function (treeId, treeNodes, targetNode) {
+                    var oldparent = null;
+                    var oldroot = null;
+                    var zTree = $.fn.zTree.getZTreeObj("treeDemo");
+                    if (!zTree) {
+                        return;
+                    }
+                    if (!targetNode.isParent && targetNode.getParentNode().level == 0) {
+                        if (treeNodes[0].deviceType != targetNode.deviceType) {
+                            var hintText = get_hintText(treeNodes[0].name, targetNode.name, targetNode.deviceType);
+                            var con = confirm(hintText);
+                            if (con) {
+                                treeNodes[0].deviceType = targetNode.deviceType;
+                                update_device_type(treeNodes[0].deviceSN, "type", targetNode.deviceType);
+                            } else {
+                                return false;
+                            }
+                        }
+
+                        if (treeNodes[0].getParentNode().children.length == 2 && treeNodes[0].getParentNode().level == 1) {
+                            oldparent = treeNodes[0].getParentNode();
+                        } else if (treeNodes[0].getParentNode().children.length == 1 && treeNodes[0].getParentNode().level == 0) {
+                            oldroot = treeNodes[0].getParentNode();
+                        }
+                        var parentNode = targetNode.getParentNode();
+                        var name = get_nosamename("gate");
+                        newNode = zTree.addNodes(parentNode, { id: name, name: name, isParent: true, open: true, icon: "common/img/CameraGroup.png" });
+                        movenode_and_setflag(targetNode, newNode[0], newNode[0].tId);
+
+                        movenode_and_setflag(treeNodes[0], newNode[0], newNode[0].tId);
+
+                        if (oldparent) {
+                            movenode_and_setflag(oldparent.children[0], oldparent.getParentNode(), "");
+                            zTree.removeNode(oldparent);
+                        }
+                        if (oldroot) {
+                            zTree.removeNode(oldroot);
+                        }
+                        MoveTest.mouseDown(null, treeId, treeNodes[0]);
+                        return false;
+                    }
+                    if (!targetNode.isParent && targetNode.getParentNode().level != 0) {
+                        return false;
+                    }
+                    if (targetNode.isParent && targetNode.level == 1) {
+                        var status = isSameType(treeNodes[0].deviceType, targetNode);
+                        if (status) {
+                            var hintText = get_hintText(treeNodes[0].name, targetNode.children[0].name, targetNode.children[0].deviceType);
+                            var con = confirm(hintText);
+                            if (con) {
+                                treeNodes[0].deviceType = targetNode.children[0].deviceType;
+                                update_device_type(treeNodes[0].deviceSN, "type", treeNodes[0].deviceType);
+                            } else {
+                                return false;
+                            }
+                        }
+                    }
+                },
+                dblClickExpand: function dblClickExpand(treeId, treeNode) {
+                    return treeNode.level > 0;
+                },
+                onRemove: function (event, treeId, treeNode) {
+                    var zTree = $.fn.zTree.getZTreeObj("treeDemo");
+                    if (!zTree) {
+                        return;
+                    }
+                    var parentNode = treeNode.getParentNode();
+                    if (!parentNode) {
+                        return false;
+                    }
+                    rootNode = parentNode.getParentNode();
+                    if (!rootNode || !parentNode.children) {
+                        return false;
+                    }
+                    if (parentNode.children.length == 1) {
+                        movenode_and_setflag(parentNode.children[0], rootNode, "");
+                        zTree.removeNode(parentNode);
+                    }
+                }
+            };
+
+            function get_hintText(ip, name, type) {
+                var cn_type = get_cn_type(type);
+                return "Change the type to " + cn_type + "?"
+            }
+            var cur_node;
+            function update_device_type(sn, type, value) {
+                var list = device_data_json["vzids"];
+                for (var i = 0; i < list.length; i++) {
+                    if (list[i].sn == sn) {
+                        list[i][type] = value;
+                        break;
+                    }
+                }
+                init_table();
+                isSave = false;
+            }
+            function get_cn_type(type) {
+                return type;
+            }
+            function isSameType(type, parentNode) {
+                var flag = false;
+                for (var i = 0; i < parentNode.children.length; i++) {
+                    if (parentNode.children[i].deviceType != type) {
+                        flag = true;
+                        break;
+                    }
+                }
+                return flag;
+            }
+            function get_root_node(treenode) {
+                if (treenode.level == 0) {
+                    return treenode;
+                } else {
+                    return get_root_node(treenode.getParentNode());
+                }
+            }
+            function movenode_and_setflag(treeNode, parentNode, flag) {
+                var zTree = $.fn.zTree.getZTreeObj("treeDemo");
+                if (!zTree) {
+                    return;
+                }
+                treeNode.deviceFlag = flag;
+                zTree.moveNode(parentNode, treeNode, "inner");
+                update_device_flag(treeNode, treeNode.deviceFlag);
+            }
+            function clear_tb() {
+                var zTree = $.fn.zTree.getZTreeObj("treeDemo");
+                if (!zTree) {
+                    return;
+                }
+                sel_sn_list = [];
+                $("#show_tree_cur tr:gt(0)").remove();
+                $("#show_input_tb tr:gt(0)").remove();
+                $("#show_output_tb tr:gt(0)").remove();
+                zTree.cancelSelectedNode();
+            }
+            function isSameName(name, tid) {
+                var zTree = $.fn.zTree.getZTreeObj("treeDemo");
+                if (!zTree) {
+                    return;
+                }
+                var nodes0 = zTree.getNodesByParam("isParent", true, null);
+                for (var i = 0; i < nodes0.length; i++) {
+                    if (nodes0[i].tId == tid) {
+                        continue;
+                    }
+                    if (nodes0[i].name == name) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            function init_cur_node(treeNode) {
+                var str_td = "";
+                $("#show_tree_cur tr:gt(0)").remove();
+                $("#show_input_tb tr:gt(0)").remove();
+                $("#show_output_tb tr:gt(0)").remove();
+                if (!treeNode || !treeNode.children) {
+                    return false;
+                }
+                for (var i = 0; i < treeNode.children.length; i++) {
+                    if (treeNode.children[i].isParent) {
+                        for (var j = 0; j < treeNode.children[i].children.length; j++) {
+                            str_td += get_tr_str(treeNode.children[i].children[j]);
+                            sel_sn_list.push(treeNode.children[i].children[j].deviceSN);
+                        }
+                    } else {
+                        str_td += get_tr_str(treeNode.children[i]);
+                        sel_sn_list.push(treeNode.children[i].deviceSN);
+                    }
+                }
+                $("#show_tree_cur").append(str_td);
+                init_table();
+                for (var i = 0; i < treeNode.children.length; i++) {
+                    if (treeNode.children[i].isParent) {
+                        for (var j = 0; j < treeNode.children[i].children.length; j++) {
+                            bind_select_input(treeNode.children[i].children[j]);
+                        }
+                    } else {
+                        bind_select_input(treeNode.children[i]);
+                    }
+                }
+            }
+            function bind_select_input(treeNode) {
+                var ele_select = "#" + treeNode.deviceSN + "_select";
+                var ele_input = "#" + treeNode.deviceSN + "_input";
+                init_selectmenu(ele_select, 100, 150);
+                $(ele_select).select_val(treeNode.deviceType);
+                $(ele_select).on("selectmenuchange", function (event, ui) {
+                    if (treeNode.getParentNode().level == 1) {
+                        var childs = treeNode.getParentNode().children;
+                        for (var i = 0; i < childs.length; i++) {
+                            var cur_select = "#" + childs[i].deviceSN + "_select";
+                            childs[i].deviceType = $(ele_select).val();
+                            $(cur_select).select_val(childs[i].deviceType);
+                            update_device_type(childs[i].deviceSN, "type", childs[i].deviceType);
+                        }
+                    } else {
+                        treeNode.deviceType = $(ele_select).val();
+                        update_device_type(treeNode.deviceSN, "type", treeNode.deviceType);
+                    }
+                });
+            }
+            function get_tr_str(treeNode) {
+                return '<tr><td>' + treeNode.name + '</td><td>' + treeNode.deviceIP + '</td><td><select id="' + treeNode.deviceSN + '_select' + '" deviceSN="' + treeNode.deviceSN + '"><option value="entrance">entrance</option><option value="exit">exit</option><option value="unknown">unknown</option></select></td></tr>';
+            }
+
+            function rename_rf(treeNode) {
+                if (!treeNode.children) {
+                    return false;
+                }
+                for (var i = 0; i < treeNode.children.length; i++) {
+                    if (!treeNode.children[i].isParent) {
+                        update_device_flag(treeNode.children[i], treeNode.children[i].deviceFlag);
+                    } else {
+                        rename_rf(treeNode.children[i]);
+                    }
+                }
+            }
+            function update_device_flag(treeNode, value) {
+                var name = get_device_name(treeNode) + "#" + get_flag("encode", value);
+                update_device_type(treeNode.deviceSN, "name", name);
+            }
+            function get_flag(type, value) {
+                if (value == "") {
+                    return value;
+                } else {
+                    if (type == "encode") {
+                        return Base64.encode(value, true);
+                    } else {
+                        return Base64.decode(value, true);
+                    }
+                }
+            }
+            function get_device_name(treeNode) {
+                if (treeNode.level == 0) {
+                    return Base64.encode(treeNode.name, true);
+                } else {
+                    return get_device_name(treeNode.getParentNode()) + "&" + Base64.encode(treeNode.name, true);
+                }
+            }
+
+            function traverse_tree(treeNode) {
+                if (!treeNode.children) {
+                    return false;
+                }
+                for (var i = 0; i < treeNode.children.length; i++) {
+                    if (!treeNode.children[i].isParent) {
+                        del_treeNode(treeNode.children[i]);
+                    } else {
+                        traverse_tree(treeNode.children[i]);
+                    }
+                }
+            }
+            function setRenameBtn(treeId, treeNode) {
+                return true;
+            }
+
+            function setRemove(treeId, treeNode) {
+                //if (treeNode.level == 0) {
+                //    return false;
+                //}
+                return true;
+            }
+            var setting = {
+                edit: {
+                    enable: true,
+                    showRemoveBtn: setRemove,
+                    showRenameBtn: setRenameBtn,
+                    drag: {
+                        prev: MoveTest.prevTree,
+                        next: MoveTest.nextTree,
+                        inner: MoveTest.innerTree
+                    }
+                },
+                data: {
+                    keep: {
+                        parent: true,
+                        leaf: false
+                    },
+                    simpleData: {
+                        enable: true
+                    }
+                },
+                callback: {
+                    onMouseUp: MoveTest.dom2Tree,
+                    beforeRemove: MoveTest.remove,
+                    onMouseDown: MoveTest.mouseDown,
+                    onRename: MoveTest.rename,
+                    beforeRename: MoveTest.beforeRename,
+                    onDrop: MoveTest.nodeDrop,
+                    onDrag: MoveTest.nodeDrag,
+                    beforeDrag: MoveTest.beforeDrag,
+                    beforeDrop: MoveTest.beforeDrop,
+                    onRemove: MoveTest.onRemove
+                },
+                view: {
+                    selectedMulti: false,
+                    //dblClickExpand: MoveTest.dblClickExpand,
+                    showLine: false
+                }
+            };
+
+            var zNodes = [
+            ];
+
+            function get_remain_info(plate, ip, name, time) {
+                return '<tr><td>' + plate + '</td><td>' + ip + '</td><td>' + name + '</td><td>' + timeConverter(time) + '</td></tr>';
+            }
+            function show_remain_paltes(data) {
+                $("#remain_info tr:gt(0)").remove();
+                var json_data = eval(data);
+                $.each(json_data, function (index, item) {
+                    $("#remain_info").append(get_remain_info(json_data[index].plate, json_data[index].enter_ip, json_data[index].enter_name, json_data[index].enter_time));
+                });
+            }
+
+            function add_new_node() {
+                var zTree = $.fn.zTree.getZTreeObj("treeDemo");
+                if (!zTree) {
+                    return;
+                }
+                var name = get_nosamename("park");
+                var nodes = zTree.addNodes(null, { id: name, name: name, isParent: true, open: true });
+                clear_tb();
+                zTree.selectNode(nodes[0]);
+                isNewNode = false;
+            }
+            function get_nosamename(name) {
+                var str = name;
+                str += Math.ceil(Math.random() * 100);
+                if (isSameName(str, "")) {
+                    return str;
+                } else {
+                    get_nosamename();
+                }
+            }
+            function appendEle(sn, type, ip, num, flag) {
+                var str = "<div class=\"domBtn\" domid=\"" + num + "\" deviceSN=\"" + sn + "\" deviceIP=\"" + ip + "\" deviceType=\"" + type + "\" deviceFlag=\"" + flag + "\"><p class=\"img\"></p><p>" + ip + "</p></div>";
+                $(".categoryDiv").append(str);
+            }
+
+            function get_tree_znode(obj) {
+                var arr_flag = obj.name.split("#");
+                var device_flag = "";
+                if (arr_flag[1]) {
+                    device_flag = get_flag("decode", arr_flag[1]);
+                }
+                var arr = arr_flag[0].split("&");
+                var type = obj.type;
+                var sn = obj.sn;
+                var ip = obj.ip_addr;
+                var status = obj.state;
+                for (var j = 0; j < arr.length; j++) {
+                    if (arr[j] == "") {
+                        continue;
+                    }
+                    var json = {};
+                    json.id = Base64.decode(arr[j], true);
+                    json.name = Base64.decode(arr[j], true);
+                    if (j == 0) {
+                        json.pId = 0;
+                    } else {
+                        json.pId = Base64.decode(arr[j - 1], true);
+                    }
+                    if (j != arr.length - 1) {
+                        json.isParent = true;
+                        json.open = true;
+                        if (arr.length == 3 && j == 1) {
+                            json.icon = "common/img/CameraGroup.png";
+                        }
+                    } else {
+                        json.deviceSN = sn;
+                        json.deviceIP = ip;
+                        json.deviceType = type;
+                        json.deviceFlag = device_flag;
+                        if (status == "offline") {
+                            json.icon = "common/img/s_offline.png";
+                        } else {
+                            json.icon = "common/img/s_online.png";
+                        }
+                    }
+                    var flag = true;
+                    for (var k = 0; k < zNodes.length; k++) {
+                        if (JSON.stringify(zNodes[k]) == JSON.stringify(json)) {
+                            flag = false;
+                            break;
+                        }
+                    }
+                    if (flag) {
+                        zNodes.push(json);
+                    }
+                }
+            }
+
+            function init_table() {
+                $("#show_input_tb tr:gt(0)").remove();
+                $("#show_output_tb tr:gt(0)").remove();
+                if (sel_sn_list.length == 0) {
+                    return false;
+                }
+                var list = device_data_json["vzids"];
+                for (var i = 0; i < list.length; i++) {
+                    for (var j = 0; j < sel_sn_list.length; j++) {
+                        if (list[i].sn == sel_sn_list[j]) {
+                            append_tb(list[i]);
+                        }
+                    }
+                }
+            }
+
+            function append_tb(obj) {
+                var name = obj.name.split("#")[0];
+                var name = name.substring(name.lastIndexOf("&") + 1);
+                var str = "<tr><td>" + Base64.decode(name, true) + "</td><td>" + obj.ip_addr + "</td></tr>";
+                if (obj.type == "entrance") {
+                    $("#show_input_tb").append(str);
+                } else if (obj.type == "exit") {
+                    $("#show_output_tb").append(str);
+                }
+            }
+            function init_tree_and_tb(ajaxdata) {
+                var json_data;
+                try {
+                    json_data = eval("(" + ajaxdata + ")");
+                } catch (e) {
+                    return false;
+                }
+                if (!json_data.vzids) {
+                    return false;
+                }
+                $(".categoryDiv").empty();
+                device_data_json = json_data;
+                var list = json_data["vzids"];
+                for (var i = 0; i < list.length; i++) {
+                    if (list[i].name == "") {
+                        appendEle(list[i].sn, list[i].type, list[i].ip_addr, i + 11, "");
+                    } else {
+                        get_tree_znode(list[i]);
+                    }
+                }
+                $.fn.zTree.init($("#treeDemo"), setting, zNodes);
+                MoveTest.bindDom();
+
+                var id = setInterval(function () {
+                    if (isSave) {
+                        get_cfg(get_connect_status);
+                    }
+                }, 5000);
+            }
+
+            function get_connect_status(data) {
+                var json_data = eval("(" + data + ")");
+                if (!json_data.vzids) {
+                    return false;
+                }
+                var zTree = $.fn.zTree.getZTreeObj("treeDemo");
+                if (!zTree) {
+                    return;
+                }
+                var nodes = get_all_node();
+                var deviceArr = json_data.vzids;
+                if (!deviceArr) {
+                    return false;
+                }
+                for (var i = 0; i < nodes.length; i++) {
+                    for (var j = 0; j < deviceArr.length; j++) {
+                        if (nodes[i].deviceSN == deviceArr[j].sn) {
+                            if (deviceArr[j].state == "online") {
+                                nodes[i].icon = "common/img/s_online.png";
+                            } else {
+                                nodes[i].icon = "common/img/s_offline.png";
+                            }
+                            zTree.updateNode(nodes[i]);
+                        }
+                    }
+                }
+                $(".categoryDiv").html("");
+                for (var i = 0; i < deviceArr.length; i++) {
+                    if (deviceArr[i].name == "") {
+                        appendEle(deviceArr[i].sn, deviceArr[i].type, deviceArr[i].ip_addr, i + 11, "");
+                    }
+                }
+            }
+            function del_treeNode(treeNode) {
+                if (cur_node) {
+                    if (treeNode.deviceSN == cur_node.deviceSN) {
+                        $("#show_tree_cur tr:gt(0)").remove();
+                        cur_node = null;
+                    }
+                }
+                update_device_type(treeNode.deviceSN, "name", "");
+                appendEle(treeNode.deviceSN, treeNode.deviceType, treeNode.deviceIP, treeNode.tId, "");
+            }
+            function get_all_node() {
+                var zTree = $.fn.zTree.getZTreeObj("treeDemo");
+                if (!zTree) {
+                    return;
+                }
+                var nodeArr = [];
+                var rootNodes = zTree.getNodes();
+                for (var i = 0; i < rootNodes.length; i++) {
+                    get_all_child(rootNodes[i], nodeArr);
+                }
+                return nodeArr;
+            }
+            function get_all_child(node, arr) {
+                if (node.isParent) {
+                    var childNodes = node.children;
+                    if (childNodes) {
+                        for (var i = 0; i < childNodes.length; i++) {
+                            if (childNodes[i].isParent) {
+                                arr = get_all_child(childNodes[i], arr);
+                            } else {
+                                arr.push(childNodes[i]);
+                            }
+                        }
+                    }
+                } else {
+                    arr.push(node);
+                }
+                return arr;
+            }
+            function set_device_info() {
+                var arr = get_all_node();
+                var names = "";
+                for (var i = 0; i < arr.length; i++) {
+                    if (arr[i].deviceType == "unknown") {
+                        names += arr[i].name;
+                        if (i < arr.length - 1) {
+                            names += "、";
+                        }
+                    }
+                }
+                isNewNode = true;
+                isSave = true;
+                var jsonstr = JSON.stringify(device_data_json);
+                set_cfg(jsonstr, function (ajaxdata) {
+                    var json = eval("(" + ajaxdata + ")");
+                    if (json.state == 200) {
+                        show_informer();
+                    }
+                });
+            }
+
+            this.init = function () {
+                $("#http_center tr:not(.small_title)").prepend("<td style='min-width:15px'></td>");
+                $(".small_title").show();
+                $("#new_node").click(add_new_node);
+                $("#set_device_info").click(set_device_info);
+
+                function checkIsSave() {
+                    if (!isSave) {
+                        return "Configuration changes are not saved";
+                    }
+                }
+                window.onbeforeunload = function () {
+                    return checkIsSave();
+                }
+                get_cfg(init_tree_and_tb);
+            }
+        }
+        var centerserver_tab = new function () {
+            var g_centerserver_hostname = null;
+            var g_centerserver_port = null;
+            var g_centerserver_enable_ssl = null;
+            var g_centerserver_ssl_port = null;
+            var g_centerserver_timeout = null;
+            var g_centerserver_enable = null;
+            var g_centerserver_device_reg_uri = null;
+            var g_centerserver_plate_enable = null;
+            var g_centerserver_plate_uri = null;
+            var g_centerserver_plateResultLevel = null;
+            var g_centerserver_bSendImage = null;
+            var g_centerserver_bSendSmallImage = null;
+            var g_cs_alarm_state_enable = null;
+            var g_cs_alarm_state_uri = null;
+            var g_centerserver_hostname_alt = null;
+            function test_ip(ip) {
+                var addr = ip.split('.');
+                if (addr.length != 4) return false;
+                for (var i = 0; i < 4; i++) {
+                    if (addr[i].length > 3) return false;
+                    var val = parseInt(addr[i]);
+                    if (isNaN(val) || val < 0 || val > 255) return false;
+                }
+                return true;
+            }
+            function test_add(ip) {
+                var reg = /[a-zA-Z0-9][-a-zA-Z0-9]{0,62}(\.[a-zA-Z0-9][-a-zA-Z0-9]{0,62})+\.?/;
+                return reg.test(ip);
+            }
+
+            function get_http_config_all() {
+                $.ajax({
+                    type: "GET",
+                    url: "/v1/push/configuration",
+                    success: function (ajaxdata) {
+                        try {
+                            var json_data = ajaxdata;
+                            g_centerserver_hostname = Base64.decode(json_data.main_server, true);
+                            g_centerserver_port = json_data.port;
+                            // g_centerserver_enable_ssl = json_cs.enable_ssl;
+                            // g_centerserver_ssl_port = json_cs.ssl_port;
+                            g_centerserver_timeout = json_data.timeout;
+
+                            $("#centerserver_hostname").val(g_centerserver_hostname);
+                            $("#centerserver_port").val(g_centerserver_port);
+                            // $("#centerserver_enable_ssl").check_val(g_centerserver_enable_ssl == 1);
+                            // $("#centerserver_ssl_port").val(g_centerserver_ssl_port);
+                            $("#centerserver_timeout").val(g_centerserver_timeout);
+
+                            var heartbeat;
+                            heartbeat = json_data.heartbeat;
+                            $("#centerserver_device_reg_enable").check_val(heartbeat.enable == 1);
+                            g_centerserver_device_reg_uri = Base64.decode(heartbeat.path, true);
+                            $("#centerserver_device_reg_uri").val(g_centerserver_device_reg_uri);
+
+                            var push_plate;
+                            push_plate = json_data.push_plate;
+                            g_centerserver_plate_enable = push_plate.enable;
+                            g_centerserver_plate_uri = Base64.decode(push_plate.path, true);
+                            g_centerserver_bSendImage = push_plate.with_full_image;
+                            g_centerserver_bSendSmallImage = push_plate.with_clip_image;
+
+                            $("#centerserver_plate_enable").check_val(g_centerserver_plate_enable == 1);
+                            $("#centerserver_plate_uri").val(g_centerserver_plate_uri);
+                            // $("#centerserver_plate_content_level").select_val(json_cs_plate.plate_rlt_level);
+                            $("#centerserver_plate_send_image").check_val(g_centerserver_bSendImage == 1);
+                            $("#centerserver_plate_send_small_image").check_val(g_centerserver_bSendSmallImage == 1);
+
+                            var push_state;
+                            push_state = json_data.push_state;
+                            g_cs_alarm_state_enable = push_state.enable;
+                            g_cs_alarm_state_uri = Base64.decode(push_state.path, true);
+
+                            $("#cs_alarm_state_enable").check_val(g_cs_alarm_state_enable == 1);
+                            $("#cs_alarm_state_uri").val(g_cs_alarm_state_uri);
+
+                            // var json_ssl_ca;
+                            // json_ssl_ca = json_data.ssl_ca;
+                            // var ca_enable = json_ssl_ca.ca_enable;
+                            // var cur_file_exist = json_ssl_ca.ca_file_exist;
+                            // var ssl_ca_str;
+                            // if (cur_file_exist == 1) {
+                            //     file_exist = 1;
+                            //     ssl_ca_str = "The certificate has been uploaded";
+                            //     $("#prompt_text1").html(ssl_ca_str).css("color", "green");
+                            // } else {
+                            //     file_exist = 0;
+                            //     ssl_ca_str = "Certificate not uploaded";
+                            //     $("#prompt_text1").html(ssl_ca_str).css("color", "red");
+                            // }
+                            // if (ca_enable == 0) {
+                            //     $("#anonymity").check_val(true);
+                            //     $("#upload_tr").hide();
+                            // } else {
+                            //     $("#credential").check_val(true);
+                            //     $("#upload_tr").show();
+                            // }
+
+                            // $("#http_offline_enable").check_val(json_data.offline_status == 1);
+                            // $("#http_poll_enable").check_val(json_data.serv_poll_status == 1);
+                            // $("#httprepushnums_sel").select_val(json_data.repush_nums);
+
+                            // var ip_ext = "";
+                            // if (json_data.http_ip_ext != null) {
+                            //     var IP_Ext_arr = json_data.http_ip_ext.ip_ext;
+                            //     if (IP_Ext_arr) {
+                            //         for (var i = 0; i < IP_Ext_arr.length; i++) {
+                            //             if (ip_ext != "") {
+                            //                 ip_ext += ";";
+                            //             }
+                            //             ip_ext += Base64.decode(IP_Ext_arr[i], true);
+                            //         }
+                            //     }
+                            // }
+                            // g_centerserver_hostname_alt = ip_ext;
+                            // $("#centerserver_hostnamea_alt").val(ip_ext);
+                        } catch (e) {
+                            return false;
+                        }
+                    }
+                });
+            }
+            function set_http_config_all() {
+                var json_cfg_req = {};
+
+                var hostname = $("#centerserver_hostname").val();
+                var port = $("#centerserver_port").val();
+                var enable_ssl = $("#centerserver_enable_ssl").check_val() ? 1 : 0;
+                var ssl_port = $("#centerserver_ssl_port").val();
+                var timeout = $("#centerserver_timeout").val();
+                if (isNaN(port)) {
+                    alert("Server port error");
+                    port = g_centerserver_port;
+                }
+                // if (isNaN(ssl_port)) {
+                //     alert("SSL port error");
+                //     ssl_port = g_centerserver_ssl_port;
+                // }
+                if (isNaN(timeout)) {
+                    alert("timeout error!");
+                    timeout = g_centerserver_timeout;
+                }
+                if (timeout <= 0 || timeout > 30) {
+                    alert("Timeout range from 1 to 30");
+                    timeout = g_centerserver_timeout;
+                }
+                json_cfg_req.main_server = Base64.encode(hostname, true);
+                json_cfg_req.port = Number(port);
+                // json_cs.enable_ssl = Number(enable_ssl);
+                // json_cs.ssl_port = Number(ssl_port);
+                json_cfg_req.timeout = Number(timeout);
+
+                var enable = 0;
+                if ($("#centerserver_device_reg_enable").check_val()) {
+                    enable = 1;
+                }
+                var centerserver_device_reg_uri = $("#centerserver_device_reg_uri").val();
+                var json_dev_reg = {};
+                json_dev_reg.enable = enable;
+                json_dev_reg.path = Base64.encode(centerserver_device_reg_uri, true);
+                json_cfg_req.heartbeat = json_dev_reg;
+
+                var centerserver_plate_enable = $("#centerserver_plate_enable").check_val() ? 1 : 0;
+                var centerserver_plate_clear_offline = 0;
+                var centerserver_plate_uri = $("#centerserver_plate_uri").val();
+                var plateResultLevel = $("#centerserver_plate_content_level").select_val();
+                var bSendImage = $("#centerserver_plate_send_image").check_val() ? "1" : "0";
+                var bSendSmallImage = $("#centerserver_plate_send_small_image").check_val() ? "1" : "0";
+                var json_plate = {};
+                // json_plate.clear_offline = centerserver_plate_clear_offline;
+                json_plate.enable = centerserver_plate_enable;
+                json_plate.path = Base64.encode(centerserver_plate_uri, true);
+                // json_plate.plate_rlt_level = Number(plateResultLevel);
+                json_plate.with_full_image = Number(bSendImage);
+                json_plate.with_clip_image = Number(bSendSmallImage);
+                json_cfg_req.push_plate = json_plate;
+
+                var cs_alarm_state_enable = $("#cs_alarm_state_enable").check_val() ? 1 : 0;
+                var cs_alarm_state_uri = $("#cs_alarm_state_uri").val();
+                var cs_alarm_state = {};
+                cs_alarm_state.enable = cs_alarm_state_enable;
+                cs_alarm_state.path = Base64.encode(cs_alarm_state_uri, true);
+                json_cfg_req.push_state = cs_alarm_state;
+
+                // var centerserver_hostnamea_alt = $("#centerserver_hostnamea_alt").val();
+                // if (g_centerserver_hostname_alt != centerserver_hostnamea_alt) {
+                //     var json_ip_ext = {}
+                //     json_ip_ext.ip_ext = [];
+                //     var ip_error = false;
+                //     if (centerserver_hostnamea_alt != "") {
+                //         var ip_arr = centerserver_hostnamea_alt.split(";");
+                //         for (var i = 0; i < ip_arr.length; i++) {
+                //             if (!test_add(ip_arr[i]) && !test_ip(ip_arr[i])) {
+                //                 alert("The alternate server address is not correct");
+                //                 ip_error = true;
+                //                 break;
+                //             } else {
+                //                 //var json = {};
+                //                 //sjon.ip_ext = ;
+                //                 json_ip_ext.ip_ext.push(Base64.encode(ip_arr[i], true));
+                //             }
+                //         }
+                //     }
+                //     if (!ip_error) {
+                //         json_cfg_req.body.http_ip_ext = json_ip_ext;
+                //     }
+                // }
+
+                // var ssl_enable = 0;
+                // if ($("#anonymity").check_val()) {
+                //     ssl_enable = 0;
+                // } else if ($("#credential").check_val()) {
+                //     ssl_enable = 1;
+                // }
+                // if (ssl_enable == 1 && file_exist == 0) {
+                //     alert("Please upload the certificate");
+                // } else {
+                //     var cfg_ssl_ca = {};
+                //     cfg_ssl_ca.ca_enable = ssl_enable;
+                //     json_cfg_req.body.ssl_ca = cfg_ssl_ca;
+                // }
+
+                // json_cfg_req.body.offline_status = $("#http_offline_enable").check_val() ? 1 : 0;
+                // json_cfg_req.body.serv_poll_status = $("#http_poll_enable").check_val() ? 1 : 0;
+                // json_cfg_req.body.repush_nums = Number($("#httprepushnums_sel").select_val());
+                var jsonstr = JSON.stringify(json_cfg_req);
+                $.ajax({
+                    type: "put",
+                    url: "/v1/push/configuration",
+                    data: jsonstr,
+                    success: function (ajaxdata) {
+                        get_http_config_all();
+                    }
+                });
+            }
+            var file_exist = 0;
+            var loaded1 = true;
+            function on_iframe_loaded1() {
+                if (loaded1) {
+                    return;
+                }
+                loaded1 = true;
+                var r;
+                var error = false;
+                try {
+                    r = getIFrameContent("hidden_frame1");
+                }
+                catch (error) {
+                    error = true;
+                }
+                if (r.match(/All upload success/)) {
+                    $("#prompt_text1").css("color", "Green");
+                    $("#prompt_text1").html("certificate uploaded successfully");
+                    file_exist = 1;
+                }
+                else {
+                    $("#prompt_text1").css("color", "Red");
+                    $("#prompt_text1").html("Certificate upload failed");
+                }
+            }
+            var iscrt1 = false;
+            function fileChange1(target) {
+                var path = $(target).val().split('\\').pop();
+                if (path != "sslca.crt") {
+                    alert("File name sslca.crt");
+                    iscrt1 = false;
+                } else {
+                    iscrt1 = true;
+                }
+            }
+            this.init = function () {
+                $("#file_input1").change(function () {
+                    fileChange1(this);
+                });
+                $("#file_input_btn1").click(function () {
+                    $("#file_input1").click();
+                    var path = $("#file_input1").val().split('\\').pop();
+                    $("#file_name1").html(path);
+                });
+                $("#frmUpload1").submit(function () {
+                    if (!$("#file_input1").val()) {
+                        alert("Select the certificate");
+                        return false;
+                    } else if (!iscrt1) {
+                        alert("File name sslca.crt");
+                        return false;
+                    }
+                    else {
+                        loaded1 = false;
+                        $("#prompt_text1").css("color", "Red");
+                        $("#prompt_text1").html("File upload...");
+                    }
+                });
+                $("#hidden_frame1").on("load", on_iframe_loaded1);
+                init_selectmenu('#centerserver_plate_content_level', 120, 150);
+                init_selectmenu('#httprepushnums_sel', 120, 150);
+                $("#centerserver_submit").click(function () {
+                    set_http_config_all();
+                });
+                $(".verify").change(function () {
+                    if ($("#anonymity").check_val()) {
+                        $("#upload_tr").hide();
+                    } else if ($("#credential").check_val()) {
+                        $("#upload_tr").show();
+                    }
+                });
+                get_http_config_all();
+            }
+        }
+        var led = new function () {
+            var g_led_cfg = null;
+            function get_led_cfg() {
+                $.ajax({
+                    type: "GET",
+                    url: "/v1/led/configuration",
+                    success: function (ajaxdata) {
+                        var json = ajaxdata;
+                        g_led_cfg = json;
+                        var g = json.global;
+                        var idle_line1 = g.idle.line1;
+                        var idle_line2 = g.idle.line2;
+                        var busy_line1 = g.busy.line1;
+                        var busy_line2 = g.busy.line2;
+                        $("#idle_line1").val(Base64.decode(idle_line1, true));
+                        $("#idle_line2").val(Base64.decode(idle_line2, true));
+                        $("#busy_line1").val(Base64.decode(busy_line1, true));
+                        $("#busy_line2").val(Base64.decode(busy_line2, true));
+                    }
+                });
+            }
+            function set_led_cfg() {
+                var idle_line1 = $("#idle_line1").val();
+                var idle_line2 = $("#idle_line2").val();
+                var busy_line1 = $("#busy_line1").val();
+                var busy_line2 = $("#busy_line2").val();
+                g_led_cfg.global.idle.line1 = Base64.encode(idle_line1,true);
+                g_led_cfg.global.idle.line2 = Base64.encode(idle_line2,true);
+                g_led_cfg.global.busy.line1 = Base64.encode(busy_line1,true);
+                g_led_cfg.global.busy.line2 = Base64.encode(busy_line2,true);
+                var jsonstr = JSON.stringify(g_led_cfg);
+                $.ajax({
+                    type: "PUT",
+                    data:jsonstr,
+                    url: "/v1/led/configuration",
+                    success: function (ajaxdata) {
+                        var json = ajaxdata;
+                        g_led_cfg = json;
+                        var g = json.global;
+                        var idle_line1 = g.idle.line1;
+                        var idle_line2 = g.idle.line2;
+                        var busy_line1 = g.busy.line1;
+                        var busy_line2 = g.busy.line2;
+                        $("#idle_line1").val(Base64.decode(idle_line1, true));
+                        $("#idle_line2").val(Base64.decode(idle_line2, true));
+                        $("#busy_line1").val(Base64.decode(busy_line1, true));
+                        $("#busy_line2").val(Base64.decode(busy_line2, true));
+                    }
+                });
+            }
+            this.init = function () {
+                $("#led_tb tr:not(.small_title)").prepend("<td style='min-width:15px'></td>");
+				$("#led_submit").click(set_led_cfg);
+				get_led_cfg();
+            }
+        }
+        $(function () {
+            tab_remain_vehicles.init();
+            centerserver_tab.init();
+            led.init();
+        });
+    </script>
+</head>
+
+<body>
+    <div id="tabs" style="width:1000px">
+        <ul>
+            <li><a href="#tabs-3">PARK</a></li>
+            <li><a href="#tabs-5">HTTP</a></li>
+            <li><a href="#tabs-4">LED</a></li>
+        </ul>
+        <div id="tabs-3">
+            <div class="cur_device_state" style="height:30px;width:900px;position:relative;line-height:30px;margin-bottom:10px;">
+                <input style="height:26px;float:right;width:100px;line-height:1px;" id="set_device_info" type="submit" value="save" />
+                <input id="new_node" type="button" name="new_node" value="create park" style="height:26px;float:right;width:100px;line-height:1px;"
+                />
+            </div>
+            <div class="device_top" style="width:900px;height:400px;">
+                <div class="device_left" style="float:left;width:69%;min-height:400px;">
+                    <div class="show_tree" style="width:40%;height:400px;float:left;border:1px solid #aaa;overflow:auto;position:relative;">
+                        <ul id="treeDemo" class="ztree"></ul>
+                    </div>
+                    <div class="show_tree_content" style="width:59%;height:400px;float:left;border:1px solid #aaa;margin-left:-1px;overflow-y:auto;">
+                        <table id="show_tree_cur" class="custom-tb ui-widget ui-widget-content realtable" style="font-size:12px; margin-top: -1px;width:100%;text-align:center;"
+                            cellpadding="0" cellspacing="0">
+                            <tr class="tr-title ui-widget-header">
+                                <th width="40%">device name</th>
+                                <th width="30%">device ip</th>
+                                <th width="30%">type</th>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                <div class="device_right" style="float:right;width:30%;min-height:400px;">
+                    <div class="div-i" style="height:192px;width:100%;outline:1px solid #aaa;">
+                        <p style="height:20px;text-align:center;line-height:20px;">entrance device</p>
+                        <div class="device_inner_div" style="width:100%;height:172px;overflow:auto;">
+                            <table id="show_input_tb" class="ui-widget ui-widget-content realtable" style="font-size:12px; margin: 0;width:100%;text-align:center;"
+                                cellpadding="0" cellspacing="0">
+                                <tr class="ui-widget-header">
+                                    <th width="50%">device name</th>
+                                    <th width="50%">device ip</th>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="div-o" style="height:192px;width:100%;outline:1px solid #aaa;margin-top:16px;">
+                        <p style="height:20px;text-align:center;line-height:20px;">exit device</p>
+                        <div class="device_inner_div" style="width:100%;height:172px;overflow:auto;">
+                            <table id="show_output_tb" class="ui-widget ui-widget-content realtable" style="font-size:12px; margin: 0;width:100%;text-align:center;"
+                                cellpadding="0" cellspacing="0">
+                                <tr class="ui-widget-header">
+                                    <th width="50%">device name</th>
+                                    <th width="50%">device ip</th>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="device_foot">
+                <div class="domBtnDiv">
+                    <div class="categoryDiv" style="width:900px;height:130px;margin-top:16px;border:1px solid #aaa;overflow:auto">
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="tabs-5">
+            <table class="dummy" border="0" id="http_center">
+                <tr class="small_title" style="display:none;font-weight:bold;">
+                    <td colspan="3" class="title_td">Basic configuration</td>
+                </tr>
+                <tr>
+                    <td style="min-width:100px">
+                        master server
+                    </td>
+                    <td>
+                        <input id="centerserver_hostname" type="text" size="30" />
+                    </td>
+                    <td class="center_log_items" rowspan="9" colspan="8" style="display:none;max-width:300px;">
+                        <p id="log_content" style="max-height:260px; overflow:auto;" />
+                    </td>
+                </tr>
+                <!-- <tr>
+                    <td>
+                        primary server priority
+                    </td>
+                    <td>
+                        <input id="http_poll_enable" type="checkbox" />
+                        <label for="http_poll_enable">enalbe</label>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="min-width:100px">
+                        standby server
+                    </td>
+                    <td>
+                        <input id="centerserver_hostnamea_alt" type="text" size="30" />
+                    </td>
+                    <td id="hostnamea_alt_hint">Multiple addresses in English ";" separated</td>
+                </tr> -->
+                <tr>
+                    <td>
+                        port
+                    </td>
+                    <td>
+                        <input id="centerserver_port" type="text" size="30" />
+                    </td>
+                </tr>
+                <!-- <tr id="tr_centerserver_ssl_enable">
+                    <td>
+                        SSL
+                    </td>
+                    <td>
+                        <input id="centerserver_enable_ssl" type="checkbox" />
+                        <label for="centerserver_enable_ssl">enable</label>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        verification mode
+                    </td>
+                    <td>
+                        <ul>
+                            <li style="float: left; list-style: none;margin-right:10px;line-height:18px;">
+                                <input type="radio" name="verify" id="anonymity" class="verify" />
+                                <label for="anonymity">anonymity</label>
+                            </li>
+                            <li style="float: left; list-style: none;margin-right:10px;line-height:18px;">
+                                <input type="radio" name="verify" id="credential" class="verify" />
+                                <label for="credential">CA certificate</label>
+                            </li>
+                        </ul>
+                    </td>
+                </tr>
+                <tr id="upload_tr">
+                    <td>certificate to upload</td>
+                    <td>
+                        <form id="frmUpload1" method="post" enctype="multipart/form-data" action="../cgi-bin/upload.cgi" target="hidden_frame1" style="margin:0;">
+                            <div id="file_name1" style="width:160px;max-width:160px;display:inline-block"></div>
+                            <input id="file_input_btn1" type="button" value="browse" />
+                            <input id="file_input1" type="file" name="file" style="display:none;height:24px;width:150px;vertical-align:middle;" accept=".crt"
+                            />
+                            <input type="submit" id="upload1" value="upload" />
+                        </form>
+                    </td>
+                    <td id="prompt_text1"></td>
+                </tr>
+                <tr id="tr_centerserver_ssl_port">
+                    <td>
+                        SSL port
+                    </td>
+                    <td>
+                        <input id="centerserver_ssl_port" type="text" size="30" />
+                    </td>
+                </tr> -->
+                <tr id="tr_centerserver_timeout">
+                    <td>
+                        timeout(s)
+                    </td>
+                    <td>
+                        <input id="centerserver_timeout" type="text" size="30" />
+                    </td>
+                </tr>
+                <tr class="small_title" style="display:none;font-weight:bold;">
+                    <td colspan="3" class="title_td">Push configuration</td>
+                </tr>
+                <tr id="tr_centerserver_device_reg_enable">
+                    <td>
+                        heartbeat
+                    </td>
+                    <td>
+                        <input id="centerserver_device_reg_enable" type="checkbox" />
+                        <label for="centerserver_device_reg_enable">enable</label>
+                    </td>
+                </tr>
+                <tr id="tr_centerserver_device_reg_uri">
+                    <td>
+                        path
+                    </td>
+                    <td>
+                        <input id="centerserver_device_reg_uri" type="text" size="30" />
+                    </td>
+                </tr>
+                <tr>
+                    <td></td>
+                </tr>
+                <tr id="tr_centerserver_plate_enable">
+                    <td>
+                        push plate result
+                    </td>
+                    <td>
+                        <input id="centerserver_plate_enable" type="checkbox" />
+                        <label for="centerserver_plate_enable">enable</label>
+                    </td>
+                </tr>
+                <tr id="tr_centerserver_plate_send_image">
+                    <td>
+                        push options
+                    </td>
+                    <td>
+                        <ul style="list-style:none">
+                            <li style="float:left;margin-right:10px;min-width:100px;">
+                                <input id="centerserver_plate_send_image" type="checkbox" />
+                                <label for="centerserver_plate_send_image">push big pictures</label>
+                            </li>
+                            <li style="float:left;min-width:100px;">
+                                <input id="centerserver_plate_send_small_image" type="checkbox" />
+                                <label for="centerserver_plate_send_small_image">push small pictures</label>
+                            </li>
+                        </ul>
+                    </td>
+                </tr>
+                <tr id="tr_centerserver_plate_uri">
+                    <td>
+                        path
+                    </td>
+                    <td>
+                        <input id="centerserver_plate_uri" type="text" size="30" />
+                    </td>
+                </tr>
+                <tr>
+                    <td></td>
+                </tr>
+                <tr id="tr_cs_alarm_state_enable">
+                    <td>
+                        push device state
+                    </td>
+                    <td>
+                        <input id="cs_alarm_state_enable" type="checkbox" />
+                        <label for="cs_alarm_state_enable">enable</label>
+                    </td>
+                </tr>
+                <tr id="tr_cs_alarm_state_uri">
+                    <td>
+                        path
+                    </td>
+                    <td>
+                        <input id="cs_alarm_state_uri" type="text" size="30" />
+                    </td>
+                </tr>
+                <!-- <tr>
+                    <td>
+                        重发次数
+                    </td>
+                    <td>
+                        <select id="httprepushnums_sel">
+                            <option value="0">不启用</option>
+                            <option value="1">1次</option>
+                            <option value="2">2次</option>
+                            <option value="3">3次</option>
+                            <option value="4">4次</option>
+                        </select>
+                    </td>
+                </tr> -->
+                <tr>
+                    <td align="right" colspan="2">
+                        <input id="centerserver_submit" type="submit" value="save" />
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <div id="tabs-4">
+            <table>
+                <tr>
+                    <td>
+                        <table class="dummy" id="led_tb">
+                            <tr class="small_title bolder">
+                                <td colspan="2" class="title_td">idle</td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    first line
+                                </td>
+                                <td>
+                                    <input type="text" id="idle_line1">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    second line
+                                </td>
+                                <td>
+                                    <input type="text" id="idle_line2">
+                                </td>
+                            </tr>
+                            <tr class="small_title bolder">
+                                <td colspan="2" class="title_td">busy</td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    first line
+                                </td>
+                                <td>
+                                    <input type="text" id="busy_line1">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    second line
+                                </td>
+                                <td>
+                                    <input type="text" id="busy_line2">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td colspan="2" align="right">
+                                    <input type="submit" value="save" id="led_submit">
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                    <td>
+                        <table class="dummy" border="1">
+                            <tr class="bolder">
+                                <td>
+                                    ESC
+                                </td>
+                                <td>
+                                    implication
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    %Y
+                                </td>
+                                <td>
+                                    Years, 2 digits, like 2018, represent 18
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    %M
+                                </td>
+                                <td>
+                                    Month, 2 digits, like January, represents 01
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    %D
+                                </td>
+                                <td>
+                                    Day, 2 digits, like a one, represents 01
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    %H
+                                </td>
+                                <td>
+                                    Hours, 2 digits, like 1, represents 01
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    %N
+                                </td>
+                                <td>
+                                    Minutes, 2 digits, like 1, represents 01
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    %S
+                                </td>
+                                <td>
+                                    Seconds, 2 digits, like 1 second, is 01
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    %P
+                                </td>
+                                <td>
+                                    License plate number, idle configuration invalid
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+</body>
+
+</html>
