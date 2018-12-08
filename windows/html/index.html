@@ -20,6 +20,10 @@
         #tabs-3 table th {
             text-align: center;
         }
+
+        .bolder {
+            font-weight: bolder;
+        }
     </style>
     <script type="text/javascript" src="js/jquery-1.11.2.min.js"></script>
     <script type="text/javascript" src="js/bootstrap.min.js"></script>
@@ -792,6 +796,12 @@
                         }
                     }
                 }
+                $(".categoryDiv").html("");
+                for (var i = 0; i < deviceArr.length; i++) {
+                    if (deviceArr[i].name == "") {
+                        appendEle(deviceArr[i].sn, deviceArr[i].type, deviceArr[i].ip_addr, i + 11, "");
+                    }
+                }
             }
             function del_treeNode(treeNode) {
                 if (cur_node) {
@@ -855,7 +865,7 @@
             }
 
             this.init = function () {
-                $("#http_center tr:not(.small_title,.sfm_tr)").prepend("<td style='min-width:15px'></td>");
+                $("#http_center tr:not(.small_title)").prepend("<td style='min-width:15px'></td>");
                 $(".small_title").show();
                 $("#new_node").click(add_new_node);
                 $("#set_device_info").click(set_device_info);
@@ -880,7 +890,6 @@
             var g_centerserver_enable = null;
             var g_centerserver_device_reg_uri = null;
             var g_centerserver_plate_enable = null;
-            var g_centerserver_plate_retran = null;
             var g_centerserver_plate_uri = null;
             var g_centerserver_plateResultLevel = null;
             var g_centerserver_bSendImage = null;
@@ -904,23 +913,17 @@
             }
 
             function get_http_config_all() {
-                var cfg = {};
-                cfg.type = "get_http_cfg";
-                var jsonstr = JSON.stringify(cfg);
                 $.ajax({
-                    type: "post",
-                    data: jsonstr,
-                    url: "/v1/http/configuration",
+                    type: "GET",
+                    url: "/v1/push/configuration",
                     success: function (ajaxdata) {
                         try {
-                            var json_data = ajaxdata.body;
-                            var json_cs;
-                            json_cs = json_data.centerserver;
-                            g_centerserver_hostname = Base64.decode(json_cs.hostname, true);
-                            g_centerserver_port = json_cs.port;
+                            var json_data = ajaxdata;
+                            g_centerserver_hostname = Base64.decode(json_data.main_server, true);
+                            g_centerserver_port = json_data.port;
                             // g_centerserver_enable_ssl = json_cs.enable_ssl;
                             // g_centerserver_ssl_port = json_cs.ssl_port;
-                            g_centerserver_timeout = json_cs.http_timeout;
+                            g_centerserver_timeout = json_data.timeout;
 
                             $("#centerserver_hostname").val(g_centerserver_hostname);
                             $("#centerserver_port").val(g_centerserver_port);
@@ -928,35 +931,29 @@
                             // $("#centerserver_ssl_port").val(g_centerserver_ssl_port);
                             $("#centerserver_timeout").val(g_centerserver_timeout);
 
-                            var json_cs_dev_reg;
-                            json_cs_dev_reg = json_data.cs_dev_reg;
-                            if (json_cs_dev_reg.enable == 1) {
-                                $("#centerserver_device_reg_enable").check_val(true);
-                            }
-                            g_centerserver_enable = json_cs_dev_reg.enable;
-                            g_centerserver_device_reg_uri = Base64.decode(json_cs_dev_reg.uri, true);
+                            var heartbeat;
+                            heartbeat = json_data.heartbeat;
+                            $("#centerserver_device_reg_enable").check_val(heartbeat.enable == 1);
+                            g_centerserver_device_reg_uri = Base64.decode(heartbeat.path, true);
                             $("#centerserver_device_reg_uri").val(g_centerserver_device_reg_uri);
 
-                            var json_cs_plate;
-                            json_cs_plate = json_data.cs_alarm_plate;
-                            g_centerserver_plate_enable = json_cs_plate.enable;
-                            g_centerserver_plate_uri = Base64.decode(json_cs_plate.uri, true);
-                            // g_centerserver_plateResultLevel = json_cs_plate.plate_rlt_level;
-                            g_centerserver_bSendImage = json_cs_plate.big_img;
-                            g_centerserver_bSendSmallImage = json_cs_plate.small_img;
+                            var push_plate;
+                            push_plate = json_data.push_plate;
+                            g_centerserver_plate_enable = push_plate.enable;
+                            g_centerserver_plate_uri = Base64.decode(push_plate.path, true);
+                            g_centerserver_bSendImage = push_plate.with_full_image;
+                            g_centerserver_bSendSmallImage = push_plate.with_clip_image;
 
-                            g_centerserver_plate_retran = json_cs_plate.retransmission;
-                            $("#centerserver_plate_enable").check_val(json_cs_plate.enable == 1);
-                            $("#centerserver_plate_retran").check_val(g_centerserver_plate_retran == 1);
+                            $("#centerserver_plate_enable").check_val(g_centerserver_plate_enable == 1);
                             $("#centerserver_plate_uri").val(g_centerserver_plate_uri);
                             // $("#centerserver_plate_content_level").select_val(json_cs_plate.plate_rlt_level);
-                            $("#centerserver_plate_send_image").check_val(json_cs_plate.big_img == 1);
-                            $("#centerserver_plate_send_small_image").check_val(json_cs_plate.small_img == 1);
+                            $("#centerserver_plate_send_image").check_val(g_centerserver_bSendImage == 1);
+                            $("#centerserver_plate_send_small_image").check_val(g_centerserver_bSendSmallImage == 1);
 
-                            var cs_alarm_state;
-                            cs_alarm_state = json_data.cs_alarm_state;
-                            g_cs_alarm_state_enable = cs_alarm_state.enable;
-                            g_cs_alarm_state_uri = Base64.decode(cs_alarm_state.uri, true);
+                            var push_state;
+                            push_state = json_data.push_state;
+                            g_cs_alarm_state_enable = push_state.enable;
+                            g_cs_alarm_state_uri = Base64.decode(push_state.path, true);
 
                             $("#cs_alarm_state_enable").check_val(g_cs_alarm_state_enable == 1);
                             $("#cs_alarm_state_uri").val(g_cs_alarm_state_uri);
@@ -1009,8 +1006,6 @@
             }
             function set_http_config_all() {
                 var json_cfg_req = {};
-                json_cfg_req.type = "set_http_cfg";
-                json_cfg_req.body = {};
 
                 var hostname = $("#centerserver_hostname").val();
                 var port = $("#centerserver_port").val();
@@ -1033,13 +1028,11 @@
                     alert("Timeout range from 1 to 30");
                     timeout = g_centerserver_timeout;
                 }
-                var json_cs = {};
-                json_cs.hostname = Base64.encode(hostname, true);
-                json_cs.port = Number(port);
+                json_cfg_req.main_server = Base64.encode(hostname, true);
+                json_cfg_req.port = Number(port);
                 // json_cs.enable_ssl = Number(enable_ssl);
                 // json_cs.ssl_port = Number(ssl_port);
-                json_cs.http_timeout = Number(timeout);
-                json_cfg_req.body.centerserver = json_cs;
+                json_cfg_req.timeout = Number(timeout);
 
                 var enable = 0;
                 if ($("#centerserver_device_reg_enable").check_val()) {
@@ -1048,8 +1041,8 @@
                 var centerserver_device_reg_uri = $("#centerserver_device_reg_uri").val();
                 var json_dev_reg = {};
                 json_dev_reg.enable = enable;
-                json_dev_reg.uri = Base64.encode(centerserver_device_reg_uri, true);
-                json_cfg_req.body.cs_dev_reg = json_dev_reg;
+                json_dev_reg.path = Base64.encode(centerserver_device_reg_uri, true);
+                json_cfg_req.heartbeat = json_dev_reg;
 
                 var centerserver_plate_enable = $("#centerserver_plate_enable").check_val() ? 1 : 0;
                 var centerserver_plate_clear_offline = 0;
@@ -1060,18 +1053,18 @@
                 var json_plate = {};
                 // json_plate.clear_offline = centerserver_plate_clear_offline;
                 json_plate.enable = centerserver_plate_enable;
-                json_plate.uri = Base64.encode(centerserver_plate_uri, true);
+                json_plate.path = Base64.encode(centerserver_plate_uri, true);
                 // json_plate.plate_rlt_level = Number(plateResultLevel);
-                json_plate.big_img = Number(bSendImage);
-                json_plate.small_img = Number(bSendSmallImage);
-                json_cfg_req.body.cs_alarm_plate = json_plate;
+                json_plate.with_full_image = Number(bSendImage);
+                json_plate.with_clip_image = Number(bSendSmallImage);
+                json_cfg_req.push_plate = json_plate;
 
                 var cs_alarm_state_enable = $("#cs_alarm_state_enable").check_val() ? 1 : 0;
                 var cs_alarm_state_uri = $("#cs_alarm_state_uri").val();
                 var cs_alarm_state = {};
                 cs_alarm_state.enable = cs_alarm_state_enable;
-                cs_alarm_state.uri = Base64.encode(cs_alarm_state_uri, true);
-                json_cfg_req.body.cs_alarm_state = cs_alarm_state;
+                cs_alarm_state.path = Base64.encode(cs_alarm_state_uri, true);
+                json_cfg_req.push_state = cs_alarm_state;
 
                 // var centerserver_hostnamea_alt = $("#centerserver_hostnamea_alt").val();
                 // if (g_centerserver_hostname_alt != centerserver_hostnamea_alt) {
@@ -1117,7 +1110,7 @@
                 var jsonstr = JSON.stringify(json_cfg_req);
                 $.ajax({
                     type: "put",
-                    url: "/v1/http/configuration",
+                    url: "/v1/push/configuration",
                     data: jsonstr,
                     success: function (ajaxdata) {
                         get_http_config_all();
@@ -1198,9 +1191,66 @@
                 get_http_config_all();
             }
         }
+        var led = new function () {
+            var g_led_cfg = null;
+            function get_led_cfg() {
+                $.ajax({
+                    type: "GET",
+                    url: "/v1/led/configuration",
+                    success: function (ajaxdata) {
+                        var json = ajaxdata;
+                        g_led_cfg = json;
+                        var g = json.global;
+                        var idle_line1 = g.idle.line1;
+                        var idle_line2 = g.idle.line2;
+                        var busy_line1 = g.busy.line1;
+                        var busy_line2 = g.busy.line2;
+                        $("#idle_line1").val(Base64.decode(idle_line1, true));
+                        $("#idle_line2").val(Base64.decode(idle_line2, true));
+                        $("#busy_line1").val(Base64.decode(busy_line1, true));
+                        $("#busy_line2").val(Base64.decode(busy_line2, true));
+                    }
+                });
+            }
+            function set_led_cfg() {
+                var idle_line1 = $("#idle_line1").val();
+                var idle_line2 = $("#idle_line2").val();
+                var busy_line1 = $("#busy_line1").val();
+                var busy_line2 = $("#busy_line2").val();
+                g_led_cfg.global.idle.line1 = Base64.encode(idle_line1,true);
+                g_led_cfg.global.idle.line2 = Base64.encode(idle_line2,true);
+                g_led_cfg.global.busy.line1 = Base64.encode(busy_line1,true);
+                g_led_cfg.global.busy.line2 = Base64.encode(busy_line2,true);
+                var jsonstr = JSON.stringify(g_led_cfg);
+                $.ajax({
+                    type: "PUT",
+                    data:jsonstr,
+                    url: "/v1/led/configuration",
+                    success: function (ajaxdata) {
+                        var json = ajaxdata;
+                        g_led_cfg = json;
+                        var g = json.global;
+                        var idle_line1 = g.idle.line1;
+                        var idle_line2 = g.idle.line2;
+                        var busy_line1 = g.busy.line1;
+                        var busy_line2 = g.busy.line2;
+                        $("#idle_line1").val(Base64.decode(idle_line1, true));
+                        $("#idle_line2").val(Base64.decode(idle_line2, true));
+                        $("#busy_line1").val(Base64.decode(busy_line1, true));
+                        $("#busy_line2").val(Base64.decode(busy_line2, true));
+                    }
+                });
+            }
+            this.init = function () {
+                $("#led_tb tr:not(.small_title)").prepend("<td style='min-width:15px'></td>");
+				$("#led_submit").click(set_led_cfg);
+				get_led_cfg();
+            }
+        }
         $(function () {
             tab_remain_vehicles.init();
             centerserver_tab.init();
+            led.init();
         });
     </script>
 </head>
@@ -1210,12 +1260,13 @@
         <ul>
             <li><a href="#tabs-3">PARK</a></li>
             <li><a href="#tabs-5">HTTP</a></li>
+            <li><a href="#tabs-4">LED</a></li>
         </ul>
         <div id="tabs-3">
             <div class="cur_device_state" style="height:30px;width:900px;position:relative;line-height:30px;margin-bottom:10px;">
-                <input style="height:26px;float:right;width:100px;line-height:1px;" id="set_device_info" type="submit"
-                    value="save" />
-                <input id="new_node" type="button" name="new_node" value="create park" style="height:26px;float:right;width:100px;line-height:1px;" />
+                <input style="height:26px;float:right;width:100px;line-height:1px;" id="set_device_info" type="submit" value="save" />
+                <input id="new_node" type="button" name="new_node" value="create park" style="height:26px;float:right;width:100px;line-height:1px;"
+                />
             </div>
             <div class="device_top" style="width:900px;height:400px;">
                 <div class="device_left" style="float:left;width:69%;min-height:400px;">
@@ -1284,8 +1335,17 @@
                     </td>
                 </tr>
                 <!-- <tr>
+                    <td>
+                        primary server priority
+                    </td>
+                    <td>
+                        <input id="http_poll_enable" type="checkbox" />
+                        <label for="http_poll_enable">enalbe</label>
+                    </td>
+                </tr>
+                <tr>
                     <td style="min-width:100px">
-                        alternative server
+                        standby server
                     </td>
                     <td>
                         <input id="centerserver_hostnamea_alt" type="text" size="30" />
@@ -1432,12 +1492,144 @@
                         <input id="cs_alarm_state_uri" type="text" size="30" />
                     </td>
                 </tr>
-                <tr>
-                    <td></td>
-                </tr>
+                <!-- <tr>
+                    <td>
+                        重发次数
+                    </td>
+                    <td>
+                        <select id="httprepushnums_sel">
+                            <option value="0">不启用</option>
+                            <option value="1">1次</option>
+                            <option value="2">2次</option>
+                            <option value="3">3次</option>
+                            <option value="4">4次</option>
+                        </select>
+                    </td>
+                </tr> -->
                 <tr>
                     <td align="right" colspan="2">
                         <input id="centerserver_submit" type="submit" value="save" />
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <div id="tabs-4">
+            <table>
+                <tr>
+                    <td>
+                        <table class="dummy" id="led_tb">
+                            <tr class="small_title bolder">
+                                <td colspan="2" class="title_td">idle</td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    first line
+                                </td>
+                                <td>
+                                    <input type="text" id="idle_line1">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    second line
+                                </td>
+                                <td>
+                                    <input type="text" id="idle_line2">
+                                </td>
+                            </tr>
+                            <tr class="small_title bolder">
+                                <td colspan="2" class="title_td">busy</td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    first line
+                                </td>
+                                <td>
+                                    <input type="text" id="busy_line1">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    second line
+                                </td>
+                                <td>
+                                    <input type="text" id="busy_line2">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td colspan="2" align="right">
+                                    <input type="submit" value="save" id="led_submit">
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                    <td>
+                        <table class="dummy" border="1">
+                            <tr class="bolder">
+                                <td>
+                                    ESC
+                                </td>
+                                <td>
+                                    implication
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    %Y
+                                </td>
+                                <td>
+                                    Years, 2 digits, like 2018, represent 18
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    %M
+                                </td>
+                                <td>
+                                    Month, 2 digits, like January, represents 01
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    %D
+                                </td>
+                                <td>
+                                    Day, 2 digits, like a one, represents 01
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    %H
+                                </td>
+                                <td>
+                                    Hours, 2 digits, like 1, represents 01
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    %N
+                                </td>
+                                <td>
+                                    Minutes, 2 digits, like 1, represents 01
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    %S
+                                </td>
+                                <td>
+                                    Seconds, 2 digits, like 1 second, is 01
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    %P
+                                </td>
+                                <td>
+                                    License plate number, idle configuration invalid
+                                </td>
+                            </tr>
+                        </table>
                     </td>
                 </tr>
             </table>
