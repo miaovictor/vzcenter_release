@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="css/page.css">
     <link rel="stylesheet" href="common/common.css">
     <link rel="stylesheet" href="common/zTreeStyle.css">
+    <link rel="stylesheet" href="css/toastr.min.css">
     <style>
         p {
             margin: 0;
@@ -20,9 +21,25 @@
         #tabs-3 table th {
             text-align: center;
         }
-
         .bolder {
             font-weight: bolder;
+        }
+        .ztree li span.button.add {
+            margin-left:2px; 
+            margin-right: -1px; 
+            background-position:-144px 0;
+            vertical-align:top; 
+            *vertical-align:middle
+        }
+        #innerdiv {
+            width: 48px;
+            height: 48px;
+            background: #fff;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            margin-left: -24px;
+            margin-top: -24px;
         }
     </style>
     <script type="text/javascript" src="js/jquery-1.11.2.min.js"></script>
@@ -35,10 +52,12 @@
     <script type="text/javascript" src="js/custom-ui.js"></script>
     <script type="text/javascript" src="js/utf8.js"></script>
     <script type="text/javascript" src="js/base64.js"></script>
+    <script type="text/javascript" src="js/toastr.js"></script>
     <script type="text/javascript">
         function get_cfg(callback) {
             $.ajax({
                 type: "get",
+                cache: false,
                 url: "/v1/park/configuration",
                 success: function (data) {
                     callback(data);
@@ -49,10 +68,14 @@
         function set_cfg(data, callback) {
             $.ajax({
                 type: "put",
+                cache: false,
                 url: "/v1/park/configuration",
                 data: data,
                 success: function (data) {
                     callback(data);
+                },
+                error: function () {
+                    show_informer_text();
                 },
                 dataType: "text"
             });
@@ -72,13 +95,27 @@
             var time = year + "-" + month + '-' + date + ' ' + hour + ':' + min + ':' + sec;
             return time;
         }
-
+        function test_ip(ip) {
+            var addr = ip.split('.');
+            if (addr.length != 4) return false;
+            for (var i = 0; i < 4; i++) {
+                if (addr[i].length > 3) return false;
+                var val = parseInt(addr[i]);
+                if (isNaN(val) || val < 0 || val > 255) return false;
+            }
+            return true;
+        }
+        function test_add(ip) {
+            var reg = /[a-zA-Z0-9][-a-zA-Z0-9]{0,62}(\.[a-zA-Z0-9][-a-zA-Z0-9]{0,62})+\.?/;
+            return reg.test(ip);
+        }
         var tab_remain_vehicles = new function () {
             var cur_drag_parent = null;
             var sel_sn_list = [];
             var device_data_json;
             var isSave = true;
             var isNewNode = true;
+            var newCount = 1;
             var MoveTest = {
                 curTarget: null,
                 curTmpTarget: null,
@@ -265,29 +302,67 @@
                     init_cur_node(treeNode);
                 },
                 rename: function (event, treeId, treeNode) {
-                    if (!treeNode.isParent) {
-                        update_device_flag(treeNode, treeNode.deviceFlag);
+                    if (treeNode.isAdd) {
+                        var same_name = true;
+                        $(".categoryDiv div").each(function () {
+                            if ($(this).attr("deviceIP") == treeNode.name) {
+                                same_name = false;
+                                treeNode.isAdd = false;
+                                treeNode.deviceSN = $(this).attr("deviceSN");
+                                treeNode.deviceType = $(this).attr("deviceType");
+                                treeNode.deviceIP = $(this).attr("deviceIP");
+                                treeNode.deviceFlag = $(this).attr("deviceFlag");
+                                var parentNode = treeNode.getParentNode();
+                                update_device_flag(treeNode, parentNode.tId);
+                                $(this).remove();
+                                clear_tb();
+                            }
+                        });
+                        if (same_name) {
+                            var ip = treeNode.name;
+                            add_device(ip, treeNode);
+                        }
                     } else {
-                        rename_rf(treeNode);
+                        if (!treeNode.isParent) {
+                            update_device_flag(treeNode, treeNode.deviceFlag);
+                        } else {
+                            rename_rf(treeNode);
+                        }
                     }
                     MoveTest.mouseDown(event, treeId, treeNode);
                 },
                 beforeRename: function (treeId, treeNode, newName) {
                     var same_name = true;
-
-                    same_name = isSameName(newName, treeNode.tId);
-                    if (!same_name) {
-                        alert("不能与其他类名相同");
-                    }
                     if (newName.length == 0) {
-                        alert("名字不能为空");
+                        show_informer_text("the name cannot be empty");
                         same_name = false;
                     }
-                    if (newName.length > 16) {
-                        alert("名字不能大于16个字符");
-                        same_name = false;
+                    if (treeNode.isAdd) {
+                        if (!test_ip(newName)) {
+                            show_informer_text("ip address error");
+                            return false;
+                        }
+                        var arr = get_all_node();
+                        for (var i = 0; i < arr.length; i++) {
+                            if (arr[i].deviceIP == newName) {
+                                same_name = false;
+                            }
+                        }
+                        if (!same_name) {
+                            show_informer_text("name repetition");
+                        }
+                        return same_name;
+                    } else {
+                        same_name = isSameName(newName, treeNode.tId);
+                        if (!same_name) {
+                            show_informer_text("name repetition");
+                        }
+                        if (newName.length > 16) {
+                            show_informer_text("names cannot be longer than 16 characters");
+                            same_name = false;
+                        }
+                        return same_name;
                     }
-                    return same_name;
                 },
                 nodeDrop: function (event, treeId, treeNodes, targetNode) {
                     var zTree = $.fn.zTree.getZTreeObj("treeDemo");
@@ -396,6 +471,26 @@
                         movenode_and_setflag(parentNode.children[0], rootNode, "");
                         zTree.removeNode(parentNode);
                     }
+                },
+                addHoverDom: function (treeId, treeNode) {
+                    if (treeNode.level != 0) {
+                        return false;
+                    }
+                    var sObj = $("#" + treeNode.tId + "_span");
+                    if (treeNode.editNameFlag || $("#addBtn_" + treeNode.tId).length > 0) return;
+                    var addStr = "<span class='button add' id='addBtn_" + treeNode.tId
+                        + "' title='add node' onfocus='this.blur();'></span>";
+                    sObj.after(addStr);
+                    var btn = $("#addBtn_" + treeNode.tId);
+                    if (btn) btn.bind("click", function () {
+                        var zTree = $.fn.zTree.getZTreeObj("treeDemo");
+                        var newNode = zTree.addNodes(treeNode, { id: (100 + newCount), pId: treeNode.id, isAdd: true, name: "new node" + (newCount++), deviceIP: "", deviceType: "unknown", deviceFlag: "", icon: "common/img/s_offline.png" });
+                        zTree.editName(newNode[0]);
+                        return false;
+                    });
+                },
+                removeHoverDom: function (treeId, treeNode) {
+                    $("#addBtn_" + treeNode.tId).unbind().remove();
                 }
             };
 
@@ -460,16 +555,18 @@
                 if (!zTree) {
                     return;
                 }
+                var same = true;
                 var nodes0 = zTree.getNodesByParam("isParent", true, null);
                 for (var i = 0; i < nodes0.length; i++) {
                     if (nodes0[i].tId == tid) {
                         continue;
                     }
                     if (nodes0[i].name == name) {
-                        return false;
+                        same = false;
+                        break;
                     }
                 }
-                return true;
+                return same;
             }
             function init_cur_node(treeNode) {
                 var str_td = "";
@@ -618,7 +715,9 @@
                 view: {
                     selectedMulti: false,
                     //dblClickExpand: MoveTest.dblClickExpand,
-                    showLine: false
+                    showLine: false,
+                    addHoverDom: MoveTest.addHoverDom,
+                    removeHoverDom: MoveTest.removeHoverDom
                 }
             };
 
@@ -641,6 +740,11 @@
                 if (!zTree) {
                     return;
                 }
+                var nodes0 = zTree.getNodesByParam("isParent", true, null);
+                if(nodes0.length == 100){
+                    show_informer_text("exceed limit");
+                    return;
+                }
                 var name = get_nosamename("park");
                 var nodes = zTree.addNodes(null, { id: name, name: name, isParent: true, open: true });
                 clear_tb();
@@ -651,16 +755,18 @@
                 var str = name;
                 str += Math.ceil(Math.random() * 100);
                 if (isSameName(str, "")) {
+                    if (!str) {
+                        alert();
+                    }
                     return str;
                 } else {
-                    get_nosamename();
+                    return get_nosamename(name);
                 }
             }
             function appendEle(sn, type, ip, num, flag) {
                 var str = "<div class=\"domBtn\" domid=\"" + num + "\" deviceSN=\"" + sn + "\" deviceIP=\"" + ip + "\" deviceType=\"" + type + "\" deviceFlag=\"" + flag + "\"><p class=\"img\"></p><p>" + ip + "</p></div>";
                 $(".categoryDiv").append(str);
             }
-
             function get_tree_znode(obj) {
                 var arr_flag = obj.name.split("#");
                 var device_flag = "";
@@ -843,27 +949,60 @@
                 return arr;
             }
             function set_device_info() {
-                var arr = get_all_node();
-                var names = "";
-                for (var i = 0; i < arr.length; i++) {
-                    if (arr[i].deviceType == "unknown") {
-                        names += arr[i].name;
-                        if (i < arr.length - 1) {
-                            names += "、";
-                        }
-                    }
-                }
                 isNewNode = true;
                 isSave = true;
                 var jsonstr = JSON.stringify(device_data_json);
                 set_cfg(jsonstr, function (ajaxdata) {
-                    var json = eval("(" + ajaxdata + ")");
-                    if (json.state == 200) {
+                    show_informer();
+                });
+            }
+            function add_device(ip, treeNode) {
+                var zTree = $.fn.zTree.getZTreeObj("treeDemo");
+                $(".outerdiv").show();
+                $.ajax({
+                    type: "get",
+                    cache: false,
+                    url: "/v1/device/vzid?ip_addr=" + ip,
+                    dataType: "text",
+                    success: function (ajaxdata) {
+                        $(".outerdiv").hide();
+                        var json = eval("(" + ajaxdata + ")");
+                        var vzid = json.vzid;
+                        var ip_addr = vzid.ip_addr;
+                        var type = vzid.type;
+                        var enable_group = vzid.enable_group;
+                        var gate_channel = vzid.gate_channel;
+                        var led_channel = vzid.led_channel;
+                        var sn = vzid.sn;
+                        var id = treeNode.getParentNode().tId;
+                        var name = get_device_name(treeNode) + "#" + get_flag("encode", id);
+                        treeNode.deviceIP = ip_addr;
+                        treeNode.deviceType = type;
+                        treeNode.deviceSN = sn;
+                        treeNode.deviceFlag = id;
+                        treeNode.isAdd = false;
+                        var new_json = {};
+                        new_json.enable_group = enable_group;
+                        new_json.gate_channel = gate_channel;
+                        new_json.ip_addr = ip_addr;
+                        new_json.led_channel = led_channel;
+                        new_json.name = name;
+                        new_json.sn = sn;
+                        new_json.state = "offline";
+                        new_json.type = type;
+                        device_data_json["vzids"].push(new_json);
+                        zTree.cancelSelectedNode();
+                        clear_tb();
                         show_informer();
+                    },
+                    error: function () {
+                        clear_tb();
+                        zTree.removeNode(treeNode);
+                        $(".outerdiv").hide();
+                        show_informer_text("failed to add device");
                     }
                 });
             }
-
             this.init = function () {
                 $("#http_center tr:not(.small_title)").prepend("<td style='min-width:15px'></td>");
                 $(".small_title").show();
@@ -897,24 +1036,10 @@
             var g_cs_alarm_state_enable = null;
             var g_cs_alarm_state_uri = null;
             var g_centerserver_hostname_alt = null;
-            function test_ip(ip) {
-                var addr = ip.split('.');
-                if (addr.length != 4) return false;
-                for (var i = 0; i < 4; i++) {
-                    if (addr[i].length > 3) return false;
-                    var val = parseInt(addr[i]);
-                    if (isNaN(val) || val < 0 || val > 255) return false;
-                }
-                return true;
-            }
-            function test_add(ip) {
-                var reg = /[a-zA-Z0-9][-a-zA-Z0-9]{0,62}(\.[a-zA-Z0-9][-a-zA-Z0-9]{0,62})+\.?/;
-                return reg.test(ip);
-            }
-
             function get_http_config_all() {
                 $.ajax({
                     type: "GET",
+                    cache: false,
                     url: "/v1/push/configuration",
                     success: function (ajaxdata) {
                         try {
@@ -1013,19 +1138,19 @@
                 var ssl_port = $("#centerserver_ssl_port").val();
                 var timeout = $("#centerserver_timeout").val();
                 if (isNaN(port)) {
-                    alert("Server port error");
+                    show_informer_text("Server port error");
                     port = g_centerserver_port;
                 }
                 // if (isNaN(ssl_port)) {
-                //     alert("SSL port error");
+                //     show_informer_text("SSL port error");
                 //     ssl_port = g_centerserver_ssl_port;
                 // }
                 if (isNaN(timeout)) {
-                    alert("timeout error!");
+                    show_informer_text("timeout error!");
                     timeout = g_centerserver_timeout;
                 }
                 if (timeout <= 0 || timeout > 30) {
-                    alert("Timeout range from 1 to 30");
+                    show_informer_text("Timeout range from 1 to 30");
                     timeout = g_centerserver_timeout;
                 }
                 json_cfg_req.main_server = Base64.encode(hostname, true);
@@ -1075,7 +1200,7 @@
                 //         var ip_arr = centerserver_hostnamea_alt.split(";");
                 //         for (var i = 0; i < ip_arr.length; i++) {
                 //             if (!test_add(ip_arr[i]) && !test_ip(ip_arr[i])) {
-                //                 alert("The alternate server address is not correct");
+                //                 show_informer_text("The alternate server address is not correct");
                 //                 ip_error = true;
                 //                 break;
                 //             } else {
@@ -1097,7 +1222,7 @@
                 //     ssl_enable = 1;
                 // }
                 // if (ssl_enable == 1 && file_exist == 0) {
-                //     alert("Please upload the certificate");
+                //     show_informer_text("Please upload the certificate");
                 // } else {
                 //     var cfg_ssl_ca = {};
                 //     cfg_ssl_ca.ca_enable = ssl_enable;
@@ -1112,7 +1237,9 @@
                     type: "put",
                     url: "/v1/push/configuration",
                     data: jsonstr,
+                    cache: false,
                     success: function (ajaxdata) {
+                        show_informer();
                         get_http_config_all();
                     }
                 });
@@ -1146,7 +1273,7 @@
             function fileChange1(target) {
                 var path = $(target).val().split('\\').pop();
                 if (path != "sslca.crt") {
-                    alert("File name sslca.crt");
+                    show_informer_text("File name sslca.crt");
                     iscrt1 = false;
                 } else {
                     iscrt1 = true;
@@ -1163,10 +1290,10 @@
                 });
                 $("#frmUpload1").submit(function () {
                     if (!$("#file_input1").val()) {
-                        alert("Select the certificate");
+                        show_informer_text("Select the certificate");
                         return false;
                     } else if (!iscrt1) {
-                        alert("File name sslca.crt");
+                        show_informer_text("File name sslca.crt");
                         return false;
                     }
                     else {
@@ -1196,6 +1323,7 @@
             function get_led_cfg() {
                 $.ajax({
                     type: "GET",
+                    cache: false,
                     url: "/v1/led/configuration",
                     success: function (ajaxdata) {
                         var json = ajaxdata;
@@ -1217,14 +1345,15 @@
                 var idle_line2 = $("#idle_line2").val();
                 var busy_line1 = $("#busy_line1").val();
                 var busy_line2 = $("#busy_line2").val();
-                g_led_cfg.global.idle.line1 = Base64.encode(idle_line1,true);
-                g_led_cfg.global.idle.line2 = Base64.encode(idle_line2,true);
-                g_led_cfg.global.busy.line1 = Base64.encode(busy_line1,true);
-                g_led_cfg.global.busy.line2 = Base64.encode(busy_line2,true);
+                g_led_cfg.global.idle.line1 = Base64.encode(idle_line1, true);
+                g_led_cfg.global.idle.line2 = Base64.encode(idle_line2, true);
+                g_led_cfg.global.busy.line1 = Base64.encode(busy_line1, true);
+                g_led_cfg.global.busy.line2 = Base64.encode(busy_line2, true);
                 var jsonstr = JSON.stringify(g_led_cfg);
                 $.ajax({
                     type: "PUT",
-                    data:jsonstr,
+                    cache: false,
+                    data: jsonstr,
                     url: "/v1/led/configuration",
                     success: function (ajaxdata) {
                         var json = ajaxdata;
@@ -1238,13 +1367,14 @@
                         $("#idle_line2").val(Base64.decode(idle_line2, true));
                         $("#busy_line1").val(Base64.decode(busy_line1, true));
                         $("#busy_line2").val(Base64.decode(busy_line2, true));
+                        show_informer();
                     }
                 });
             }
             this.init = function () {
                 $("#led_tb tr:not(.small_title)").prepend("<td style='min-width:15px'></td>");
-				$("#led_submit").click(set_led_cfg);
-				get_led_cfg();
+                $("#led_submit").click(set_led_cfg);
+                get_led_cfg();
             }
         }
         $(function () {
@@ -1256,6 +1386,11 @@
 </head>
 
 <body>
+    <div class="outerdiv" style="position:fixed;top:0;left:0;background:#fff;background:rgba(255,255,255,0.5);z-index:10;width:100%;height:100%;display:none;">
+        <div id="innerdiv" style="position:absolute;">
+            <img src="common/img/loading.gif" />
+        </div>
+    </div>
     <div id="tabs" style="width:1000px">
         <ul>
             <li><a href="#tabs-3">PARK</a></li>
@@ -1264,9 +1399,9 @@
         </ul>
         <div id="tabs-3">
             <div class="cur_device_state" style="height:30px;width:900px;position:relative;line-height:30px;margin-bottom:10px;">
-                <input style="height:26px;float:right;width:100px;line-height:1px;" id="set_device_info" type="submit" value="save" />
-                <input id="new_node" type="button" name="new_node" value="create park" style="height:26px;float:right;width:100px;line-height:1px;"
-                />
+                <input style="height:26px;float:right;width:100px;line-height:1px;" id="set_device_info" type="submit"
+                    value="save" />
+                <input id="new_node" type="button" name="new_node" value="create park" style="height:26px;float:right;width:100px;line-height:1px;" />
             </div>
             <div class="device_top" style="width:900px;height:400px;">
                 <div class="device_left" style="float:left;width:69%;min-height:400px;">
@@ -1313,7 +1448,7 @@
             </div>
             <div class="device_foot">
                 <div class="domBtnDiv">
-                    <div class="categoryDiv" style="width:900px;height:130px;margin-top:16px;border:1px solid #aaa;overflow:auto">
+                    <div class="categoryDiv" style="width:900px;height:270px;margin-top:16px;border:1px solid #aaa;overflow:auto">
                     </div>
                 </div>
             </div>
