@@ -153,11 +153,11 @@ function show_informer_text(text, time) {
     };
     var length = $(".toast-error").length;
     if (length == 0) {
-        toastr.error(text, '提示');
+        toastr.error(text, 'hint');
     }
 }
 function show_informer(text,time) {
-    var t = "保存成功";
+    var t = "save success";
     var ti = "1000";
     if (text) {
         t = text;
@@ -182,6 +182,6 @@ function show_informer(text,time) {
     };
     var length = $(".toast-success").length;
     if (length == 0) {
-        toastr.success(t, '提示');
+        toastr.success(t, 'hint');
     }
 }
